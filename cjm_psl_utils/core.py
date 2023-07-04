@@ -79,7 +79,7 @@ def file_extract(fname, # The path of the archive file
         raise Exception(f'Unrecognized archive: {fname}')
 
 # %% ../nbs/00_core.ipynb 13
-import requests
+import urllib.request
 from tqdm.auto import tqdm
 
 # %% ../nbs/00_core.ipynb 14
@@ -113,19 +113,25 @@ def download_file(url:str, # The URL of the file to download.
         return
 
     # Send a HTTP request to the URL of the file
-    response = requests.get(url, stream=True)
+    try:
+        response = urllib.request.urlopen(url)
+    except urllib.error.HTTPError as e:
+        print(f'HTTP request to url: {url} failed with status code: {e.code}.')
+        return
 
     # Check that the request was successful
-    if response.status_code == 200:
-        total_size_in_bytes= int(response.headers.get('content-length', 0))
-        block_size = 1024 #1 Kibibyte
-        progress_bar = tqdm(total=total_size_in_bytes, unit='iB', unit_scale=True)
-        with open(filename, 'wb') as file:
-            for data in response.iter_content(block_size):
-                progress_bar.update(len(data))
-                file.write(data)
-        progress_bar.close()
-        if total_size_in_bytes != 0 and progress_bar.n != total_size_in_bytes:
-            print("ERROR, something went wrong")
-    else:
-        print(f'HTTP request to url: {url} failed with status code: {response.status_code}.')
+    total_size_in_bytes= int(response.getheader('content-length', 0))
+    block_size = 1024 #1 Kibibyte
+    progress_bar = tqdm(total=total_size_in_bytes, unit='iB', unit_scale=True)
+
+    with open(filename, 'wb') as file:
+        while True:
+            chunk = response.read(block_size)
+            if not chunk:
+                break
+            file.write(chunk)
+            progress_bar.update(len(chunk))
+    progress_bar.close()
+
+    if total_size_in_bytes != 0 and progress_bar.n != total_size_in_bytes:
+        print("ERROR, something went wrong")
